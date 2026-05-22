@@ -4,8 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-mithya_engine = { 
+mithya_engine = {
     git = "https://github.com/naash/MithyaEngine.git",
-    package = "mithya_engine",
-    tag = "v0.1.0"
+    package = "mithya_engine"
 }
+winit = "0.30"
+glam = "0.24"

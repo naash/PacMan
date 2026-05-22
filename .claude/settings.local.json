@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"c:\\\\Programming Workbench\\\\Rust\\\\Sample Games\\\\Pacman\" -Recurse -File)",
+      "Bash(Select-Object FullName)",
+      "Bash(Sort-Object FullName)",
+      "Read(//c/Programming Workbench/Rust/Sample Games/**)",
+      "Bash(cargo tree *)",
+      "Bash(find ~/.cargo -path \"*/MithyaEngine*\" -type d 2>/dev/null | head -5)",
+      "Read(//c/Users/nisha/.cargo/**)",
+      "PowerShell(cargo metadata --format-version 1 --manifest-path \"c:\\\\Programming Workbench\\\\Rust\\\\Sample Games\\\\Pacman\\\\Cargo.toml\" --no-deps 2>&1)",
+      "PowerShell(python -c \"import sys, json; data=json.load\\(sys.stdin\\); [print\\(p['manifest_path']\\) for p in data['packages'] if 'mithya' in p['name'].lower\\(\\)]\")",
+      "PowerShell(Get-ChildItem \"$env:USERPROFILE\\\\.cargo\\\\git\\\\checkouts\" -ErrorAction SilentlyContinue | Select-Object Name; Get-ChildItem \"$env:USERPROFILE\\\\.cargo\\\\git\\\\db\" -ErrorAction SilentlyContinue | Select-Object Name)",
+      "Read(//c//**)"
+    ]
+  }
+}
