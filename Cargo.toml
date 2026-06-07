@@ -4,9 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-mithya_engine = {
-    git = "https://github.com/naash/MithyaEngine.git",
-    package = "mithya_engine"
-}
+mithya_engine = { path = "C:\\Programming Workbench\\Rust\\MithyaEngine\\mithya_engine" }
 winit = "0.30"
 glam = "0.24"
+rand = "0.8"

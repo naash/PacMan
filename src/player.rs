@@ -3,6 +3,8 @@
 // This software is released under the MIT License.
 // https://opensource.org/licenses/MIT
 
+use glam::Vec2;
+use mithya_engine::{ControllerBehavior, input::InputAction};
 use mithya_engine::navigation::grid_cell::GridCell;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -27,30 +29,51 @@ impl Direction {
     }
 }
 
-/// Stored as a world resource. Tracks all tile-based movement state for Pac-Man.
 pub struct PlayerState {
     pub entity_id: u32,
-    pub tile: GridCell,
-    pub target: GridCell,
     pub current_direction: Direction,
     pub queued_direction: Direction,
-    /// Fraction of the way to the next tile: 0.0 = at tile center, 1.0 = arrived.
-    pub move_progress: f32,
-    /// Movement speed in tiles per second.
-    pub speed: f32,
+    pub current_cell: GridCell,
+    pub target_cell: Option<GridCell>,
+}
+
+/// ControllerBehavior for Pacman: last direction key pressed wins each frame.
+pub struct PacmanInputBehavior {
+    pending: Option<Vec2>,
+}
+
+impl PacmanInputBehavior {
+    pub fn new() -> Self {
+        Self { pending: None }
+    }
+}
+
+impl ControllerBehavior for PacmanInputBehavior {
+    fn on_input_actions(&mut self, actions: &[InputAction]) {
+        for action in actions {
+            match action {
+                InputAction::MoveLeft  => self.pending = Some(Vec2::new(-1.0,  0.0)),
+                InputAction::MoveRight => self.pending = Some(Vec2::new( 1.0,  0.0)),
+                InputAction::MoveUp    => self.pending = Some(Vec2::new( 0.0,  1.0)),
+                InputAction::MoveDown  => self.pending = Some(Vec2::new( 0.0, -1.0)),
+                _ => {}
+            }
+        }
+    }
+
+    fn compute_intent(&mut self) -> Vec2 {
+        self.pending.take().unwrap_or(Vec2::ZERO)
+    }
 }
 
 impl PlayerState {
-    pub fn new(entity_id: u32, spawn_col: usize, spawn_row: usize) -> Self {
-        let spawn = GridCell::new(spawn_col as i32, spawn_row as i32);
+    pub fn new(entity_id: u32, spawn_cell: GridCell) -> Self {
         Self {
             entity_id,
-            tile: spawn,
-            target: spawn,
-            current_direction: Direction::Left,
+            current_direction: Direction::None,
             queued_direction: Direction::None,
-            move_progress: 0.0,
-            speed: 8.0,
+            current_cell: spawn_cell,
+            target_cell: None,
         }
     }
 }

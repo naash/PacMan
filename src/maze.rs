@@ -37,11 +37,6 @@ impl Maze {
     }
 }
 
-/// Build an engine NavGrid from the maze layout.
-///
-/// Origin is the top-left corner of the grid in world space, matching the
-/// coordinate convention used by the renderer (Y increases upward, grid
-/// center at the screen origin).
 pub fn build_nav_grid(maze: &Maze) -> NavGrid {
     let origin = Vec3::new(
         -(GRID_WIDTH as f32 * TILE_SIZE / 2.0),

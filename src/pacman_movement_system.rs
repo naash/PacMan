@@ -3,76 +3,93 @@
 // This software is released under the MIT License.
 // https://opensource.org/licenses/MIT
 
-use std::any::TypeId;
+use std::any::{Any, TypeId};
 
-use glam::Vec3;
+use glam::{Vec2, Vec3};
 use mithya_engine::{
-    core::{EngineActionQueue, EngineEventListener, EngineEventQueue, Transform},
+    Movement, Transform,
+    core::{EngineActionQueue, EngineEventListener, EngineEventQueue},
     engine::{
         resources::Time,
         system::{System, SystemUpdateContext},
         World,
     },
-    input::{InputAction, InputActionEvent},
     navigation::{grid_cell::GridCell, NavGrid},
 };
 
-use crate::{
-    maze::GRID_WIDTH,
-    player::{Direction, PlayerState},
-};
+use crate::player::{Direction, PlayerState};
 
 pub struct PacmanMovementSystem;
 
+struct FrameResult {
+    new_current_cell: GridCell,
+    new_target_cell: Option<GridCell>,
+    new_current_dir: Direction,
+    new_queued_dir: Direction,
+    snap_to: Option<Vec3>,
+    move_intent: Vec2,
+}
+
 impl System for PacmanMovementSystem {
-    fn initialize(&mut self, _world: &mut World) -> Result<(), Box<dyn std::error::Error>> {
-        Ok(())
+    fn initialize(&mut self, _world: &mut World) -> () {
     }
 
     fn update(&mut self, ctx: &mut SystemUpdateContext) {
+        let player_id = match ctx.world.resources.get::<PlayerState>() {
+            Some(p) => p.entity_id,
+            None => return,
+        };
+
         let delta = ctx.world.resources.get::<Time>().map(|t| t.delta).unwrap_or(0.0);
 
-        let mut new_queued: Option<Direction> = None;
-        for event in ctx.events.iter_type::<InputActionEvent>() {
-            let dir = match event.action {
-                InputAction::MoveLeft  => Some(Direction::Left),
-                InputAction::MoveRight => Some(Direction::Right),
-                InputAction::MoveUp    => Some(Direction::Up),
-                InputAction::MoveDown  => Some(Direction::Down),
-                _ => None,
-            };
-            if dir.is_some() {
-                new_queued = dir;
+        // Consume and zero raw keyboard intent; read speed.
+        // Zeroing prevents MovementSystem (if re-enabled) from double-applying the vector.
+        let (desired_dir, speed) = match ctx.world.entity_manager.get_component_mut::<Movement>(player_id) {
+            Some(m) => {
+                let dir = vec2_to_direction(m.intent);
+                m.intent = Vec2::ZERO;
+                (dir, m.impulse)
             }
-        }
+            None => return,
+        };
 
-        // Compute new state while holding only immutable borrows.
-        // NavGrid does not implement Clone, so we resolve everything here
-        // before taking the mutable PlayerState borrow below.
+        let current_position = match ctx.world.entity_manager.get_component::<Transform>(player_id) {
+            Some(t) => t.position,
+            None => return,
+        };
+
         let result = {
             let nav = match ctx.world.resources.get::<NavGrid>() {
-                Some(ng) => ng,
+                Some(n) => n,
                 None => return,
             };
             let player = match ctx.world.resources.get::<PlayerState>() {
                 Some(p) => p,
                 None => return,
             };
-            compute_frame(player, nav, new_queued, delta)
+            compute_frame(player, current_position, desired_dir, nav)
         };
 
-        if let Some(player) = ctx.world.resources.get_mut::<PlayerState>() {
-            result.apply_to(player);
+        // Snap to tile center on arrival, then step in the new direction for this frame.
+        let base = result.snap_to.unwrap_or(current_position);
+        let new_pos = base + result.move_intent.extend(0.0) * (speed * delta);
+        if let Some(t) = ctx.world.entity_manager.get_component_mut::<Transform>(player_id) {
+            t.position = new_pos;
         }
 
-        if let Some(t) = ctx.world.entity_manager.get_component_mut::<Transform>(result.entity_id) {
-            t.position = result.visual_pos;
+        if let Some(player) = ctx.world.resources.get_mut::<PlayerState>() {
+            player.current_cell = result.new_current_cell;
+            player.target_cell = result.new_target_cell;
+            player.current_direction = result.new_current_dir;
+            player.queued_direction = result.new_queued_dir;
         }
     }
 
     fn as_event_listener_mut(&mut self) -> Option<&mut dyn EngineEventListener> {
         None
     }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 impl EngineEventListener for PacmanMovementSystem {
@@ -82,121 +99,106 @@ impl EngineEventListener for PacmanMovementSystem {
     fn on_events(&mut self, _e: &EngineEventQueue, _a: &mut EngineActionQueue, _w: &World) {}
 }
 
-#[derive(Clone, Copy)]
-struct FrameResult {
-    entity_id: u32,
-    tile: GridCell,
-    target: GridCell,
-    current_direction: Direction,
-    queued_direction: Direction,
-    move_progress: f32,
-    visual_pos: Vec3,
-}
-
-impl FrameResult {
-    fn apply_to(self, player: &mut PlayerState) {
-        player.tile = self.tile;
-        player.target = self.target;
-        player.current_direction = self.current_direction;
-        player.queued_direction = self.queued_direction;
-        player.move_progress = self.move_progress;
-    }
-}
-
 fn compute_frame(
     player: &PlayerState,
+    position: Vec3,
+    desired_dir: Option<Direction>,
     nav: &NavGrid,
-    new_queued: Option<Direction>,
-    delta: f32,
 ) -> FrameResult {
-    let mut tile = player.tile;
-    let mut target = player.target;
-    let mut current = player.current_direction;
-    let mut queued = new_queued.unwrap_or(player.queued_direction);
-    let mut progress = player.move_progress;
-    let speed: f32 = player.speed;
+    let queued = desired_dir.unwrap_or(player.queued_direction);
 
-    step_movement(&mut tile, &mut target, &mut current, &mut queued, speed, &mut progress, nav, delta);
+    let (arrived, snap_to) = match player.target_cell {
+        Some(target) => {
+            let target_world = nav.cell_to_world(target);
+            if has_passed_center(position, target_world, player.current_direction) {
+                (true, Some(target_world))
+            } else {
+                (false, None)
+            }
+        }
+        None => (false, None),
+    };
 
-    let visual_pos = visual_position(tile, target, progress, nav);
-
-    FrameResult {
-        entity_id: player.entity_id,
-        tile,
-        target,
-        current_direction: current,
-        queued_direction: queued,
-        move_progress: progress,
-        visual_pos,
+    // Still mid-tile: keep moving, buffer the queued direction for the next tile centre.
+    if player.target_cell.is_some() && !arrived {
+        return FrameResult {
+            new_current_cell: player.current_cell,
+            new_target_cell: player.target_cell,
+            new_current_dir: player.current_direction,
+            new_queued_dir: queued,
+            snap_to: None,
+            move_intent: direction_to_intent(player.current_direction),
+        };
     }
-}
 
-fn step_movement(
-    tile: &mut GridCell,
-    target: &mut GridCell,
-    current: &mut Direction,
-    queued: &mut Direction,
-    speed: f32,
-    progress: &mut f32,
-    nav: &NavGrid,
-    delta: f32,
-) {
-    if *progress > 0.0 {
-        *progress += speed * delta; // speed in tiles/sec
-        if *progress >= 1.0 {
-            *tile = *target;
-            *progress = 0.0;
-        } else {
-            return;
+    // At a tile centre: decide the next move.
+    // Blocked directions are discarded here; they will be re-buffered next frame if the key is still held.
+    let from_cell = if arrived { player.target_cell.unwrap() } else { player.current_cell };
+
+    let mut new_target = None;
+    let mut new_dir = player.current_direction;
+    let mut new_queued = Direction::None;
+
+    if queued != Direction::None {
+        let candidate = step(from_cell, queued);
+        if nav.is_walkable(candidate) {
+            new_target = Some(candidate);
+            new_dir = queued;
+            new_queued = queued;
+        }
+        // Blocked: new_queued stays None — invalid input discarded at tile centre.
+    }
+
+    if new_target.is_none() && player.current_direction != Direction::None {
+        let candidate = step(from_cell, player.current_direction);
+        if nav.is_walkable(candidate) {
+            new_target = Some(candidate);
         }
     }
 
-    if *queued != Direction::None && try_start_move(tile, target, progress, *queued, nav) {
-        *current = *queued;
-        return;
-    }
-
-    if *current != Direction::None {
-        try_start_move(tile, target, progress, *current, nav);
+    FrameResult {
+        new_current_cell: from_cell,
+        new_target_cell: new_target,
+        new_current_dir: new_dir,
+        new_queued_dir: new_queued,
+        snap_to,
+        move_intent: if new_target.is_some() { direction_to_intent(new_dir) } else { Vec2::ZERO },
     }
 }
 
-fn try_start_move(
-    tile: &GridCell,
-    target: &mut GridCell,
-    progress: &mut f32,
-    dir: Direction,
-    nav: &NavGrid,
-) -> bool {
+// Y-up world space: Up means row--, world Y increases; Down means row++, world Y decreases.
+fn has_passed_center(pos: Vec3, target: Vec3, dir: Direction) -> bool {
+    match dir {
+        Direction::Right => pos.x >= target.x,
+        Direction::Left  => pos.x <= target.x,
+        Direction::Up    => pos.y >= target.y,
+        Direction::Down  => pos.y <= target.y,
+        Direction::None  => false,
+    }
+}
+
+fn direction_to_intent(dir: Direction) -> Vec2 {
+    match dir {
+        Direction::Right => Vec2::new( 1.0,  0.0),
+        Direction::Left  => Vec2::new(-1.0,  0.0),
+        Direction::Up    => Vec2::new( 0.0,  1.0),
+        Direction::Down  => Vec2::new( 0.0, -1.0),
+        Direction::None  => Vec2::ZERO,
+    }
+}
+
+fn step(cell: GridCell, dir: Direction) -> GridCell {
     let (dc, dr) = dir.delta();
-    let next_col = wrap_col(tile.col + dc);
-    let next_row = tile.row + dr;
+    GridCell::new(cell.col + dc, cell.row + dr)
+}
 
-    if nav.is_walkable(GridCell::new(next_col, next_row)) {
-        *target = GridCell::new(next_col, next_row);
-        *progress = f32::EPSILON;
-        true
+fn vec2_to_direction(intent: Vec2) -> Option<Direction> {
+    if intent == Vec2::ZERO {
+        return None;
+    }
+    if intent.x.abs() >= intent.y.abs() {
+        if intent.x > 0.0 { Some(Direction::Right) } else { Some(Direction::Left) }
     } else {
-        false
+        if intent.y > 0.0 { Some(Direction::Up) } else { Some(Direction::Down) }
     }
-}
-
-fn wrap_col(col: i32) -> i32 {
-    ((col % GRID_WIDTH as i32) + GRID_WIDTH as i32) % GRID_WIDTH as i32
-}
-
-fn visual_position(tile: GridCell, target: GridCell, progress: f32, nav: &NavGrid) -> Vec3 {
-    let src = nav.cell_to_world(tile);
-
-    if progress <= 0.0 {
-        return src;
-    }
-
-    // Detect tunnel wrap: column jump larger than half the grid width.
-    if (tile.col - target.col).abs() > GRID_WIDTH as i32 / 2 {
-        return src;
-    }
-
-    let dst = nav.cell_to_world(target);
-    src.lerp(dst, progress.min(1.0))
 }

@@ -11,7 +11,18 @@
       "PowerShell(cargo metadata --format-version 1 --manifest-path \"c:\\\\Programming Workbench\\\\Rust\\\\Sample Games\\\\Pacman\\\\Cargo.toml\" --no-deps 2>&1)",
       "PowerShell(python -c \"import sys, json; data=json.load\\(sys.stdin\\); [print\\(p['manifest_path']\\) for p in data['packages'] if 'mithya' in p['name'].lower\\(\\)]\")",
       "PowerShell(Get-ChildItem \"$env:USERPROFILE\\\\.cargo\\\\git\\\\checkouts\" -ErrorAction SilentlyContinue | Select-Object Name; Get-ChildItem \"$env:USERPROFILE\\\\.cargo\\\\git\\\\db\" -ErrorAction SilentlyContinue | Select-Object Name)",
-      "Read(//c//**)"
+      "Read(//c//**)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Programming Workbench\\\\Rust\\\\MithyaEngine\\\\mithya_engine\" -Recurse -Directory)",
+      "Bash(Select-Object -First 20)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Programming Workbench\\\\Rust\\\\Sample Games\\\\Pacman\" -Recurse)",
+      "Bash(Select-Object -First 50)",
+      "Bash(cargo build *)",
+      "Bash(xargs grep -l \"MovementSystem\\\\|NavAgent\\\\|NavigationSystem\\\\|Movement\")",
+      "Bash(xargs grep -l \"NavAgent\\\\|NavigationSystem\")",
+      "Bash(xargs grep -l \"struct NavAgent\\\\|struct NavigationSystem\\\\|struct NavGrid\\\\|struct NavBehavior\")",
+      "Bash(xargs cat)",
+      "Bash(xargs grep -l \"NavBehavior\")",
+      "Bash(cargo check *)"
     ]
   }
 }
