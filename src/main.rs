@@ -11,7 +11,7 @@ mod pacman_movement_system;
 mod player;
 
 use mithya_engine::{
-    Controller, ControllerSystem, Movement, MovementSystem, NavAgent, NavBehavior, NavigationSystem, Transform, asset::UniformValue, engine::{Engine, EngineConfig, EntityBuilder, GameLogic, World, system::SystemsManager}, input::{InputMapping, mapping::{InputAction, InputBinding}}, navigation::grid_cell::GridCell, rendering::{Camera, Mesh, Render}
+    Controller, Movement, NavAgent, NavBehavior, NavigationSystem, Transform, asset::UniformValue, engine::{Engine, EngineConfig, EntityBuilder, GameLogic, World, system::SystemsManager}, input::{InputMapping, mapping::{InputAction, InputBinding}}, navigation::grid_cell::GridCell, rendering::{Camera, Mesh, Render}
 };
 use glam::Vec3;
 use winit::keyboard::KeyCode;
