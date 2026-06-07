@@ -152,11 +152,10 @@ impl GameLogic for PacmanGame {
         // ControllerSystem writes move_input (ghosts) or keyboard input (Pacman) into Movement.intent.
         // PacmanMovementSystem reads desired direction, tracks tile position in PlayerState, and
         // writes a tile-aligned Movement.intent for MovementSystem to apply.
-        // MovementSystem applies Movement.intent * impulse * delta to all entity transforms.
+        // MovementSystem applies Movement.intent * impulse * delta to all entity transforms which is default.
         systems_manager.add_system(NavigationSystem::new(), world);
         systems_manager.add_system(GhostAISystem, world);
         systems_manager.add_system(PacmanMovementSystem, world);
-        systems_manager.add_system(MovementSystem, world);
         
         
         if let Some(mapping) = world.resources.get_mut::<InputMapping>() {
@@ -171,8 +170,6 @@ impl GameLogic for PacmanGame {
                 .bind(KeyCode::KeyS,       InputBinding::continuous(InputAction::MoveDown));
         }
     }
-
-    fn update(&mut self, _world: &mut World) {}
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
