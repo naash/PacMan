@@ -17,6 +17,7 @@ use mithya_engine::{
     navigation::{grid_cell::GridCell, NavGrid},
 };
 
+use crate::maze::{Maze, GRID_WIDTH};
 use crate::player::{Direction, PlayerState};
 
 pub struct PacmanMovementSystem;
@@ -63,11 +64,16 @@ impl System for PacmanMovementSystem {
                 Some(n) => n,
                 None => return,
             };
+            let maze = match ctx.world.resources.get::<Maze>() {
+                Some(m) => m,
+                None => return,
+            };
+            let tunnel_rows = maze.tunnel_rows();
             let player = match ctx.world.resources.get::<PlayerState>() {
                 Some(p) => p,
                 None => return,
             };
-            compute_frame(player, current_position, desired_dir, nav)
+            compute_frame(player, current_position, desired_dir, nav, &tunnel_rows)
         };
 
         // Snap to tile center on arrival, then step in the new direction for this frame.
@@ -99,11 +105,25 @@ impl EngineEventListener for PacmanMovementSystem {
     fn on_events(&mut self, _e: &EngineEventQueue, _a: &mut EngineActionQueue, _w: &World) {}
 }
 
+fn wrap_col(cell: GridCell, tunnel_rows: &[usize]) -> GridCell {
+    if !tunnel_rows.contains(&(cell.row as usize)) {
+        return cell;
+    }
+    if cell.col < 0 {
+        GridCell::new(GRID_WIDTH as i32 - 1, cell.row)
+    } else if cell.col >= GRID_WIDTH as i32 {
+        GridCell::new(0, cell.row)
+    } else {
+        cell
+    }
+}
+
 fn compute_frame(
     player: &PlayerState,
     position: Vec3,
     desired_dir: Option<Direction>,
     nav: &NavGrid,
+    tunnel_rows: &[usize],
 ) -> FrameResult {
     let queued = desired_dir.unwrap_or(player.queued_direction);
 
@@ -140,7 +160,7 @@ fn compute_frame(
     let mut new_queued = Direction::None;
 
     if queued != Direction::None {
-        let candidate = step(from_cell, queued);
+        let candidate = wrap_col(step(from_cell, queued), tunnel_rows);
         if nav.is_walkable(candidate) {
             new_target = Some(candidate);
             new_dir = queued;
@@ -150,7 +170,7 @@ fn compute_frame(
     }
 
     if new_target.is_none() && player.current_direction != Direction::None {
-        let candidate = step(from_cell, player.current_direction);
+        let candidate = wrap_col(step(from_cell, player.current_direction), tunnel_rows);
         if nav.is_walkable(candidate) {
             new_target = Some(candidate);
         }

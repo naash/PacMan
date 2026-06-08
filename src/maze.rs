@@ -33,7 +33,22 @@ impl Maze {
                 }
             }
         }
+        // Tunnel exits: punch through the left and right border walls.
+        tiles[GRID_HEIGHT / 2][0] = TileType::Floor;
+        tiles[GRID_HEIGHT / 2][GRID_WIDTH - 1] = TileType::Floor;
+
         Maze { tiles }
+    }
+
+    /// Returns all rows that have floor openings on both the left and right border —
+    /// i.e. tunnel rows where Pac-Man can wrap around.
+    pub fn tunnel_rows(&self) -> Vec<usize> {
+        (0..GRID_HEIGHT)
+            .filter(|&row| {
+                self.tiles[row][0] == TileType::Floor
+                    && self.tiles[row][GRID_WIDTH - 1] == TileType::Floor
+            })
+            .collect()
     }
 }
 
