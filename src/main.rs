@@ -3,24 +3,25 @@
 // This software is released under the MIT License.
 // https://opensource.org/licenses/MIT
 
-mod ai_pawn;
-mod ghost;
-mod ghost_ai_system;
 mod maze;
 mod pacman_movement_system;
 mod player;
 
 use mithya_engine::{
-    Controller, Movement, NavAgent, NavBehavior, NavigationSystem, Transform, asset::UniformValue, engine::{Engine, EngineConfig, EntityBuilder, GameLogic, World, system::SystemsManager}, input::{InputMapping, mapping::{InputAction, InputBinding}}, navigation::grid_cell::GridCell, rendering::{Camera, Mesh, Render}
+    Movement, NavAgent, NavMovementSystem, NavigationSystem, PlayerControlled, PlayerInputSystem,
+    RandomMovement, RandomMovementSystem, Transform,
+    asset::UniformValue,
+    engine::{Engine, EngineConfig, EntityBuilder, GameLogic, World, system::SystemsManager},
+    input::{InputMapping, mapping::{InputAction, InputBinding}},
+    navigation::grid_cell::GridCell,
+    rendering::{Camera, Mesh, Render},
 };
 use glam::Vec3;
 use winit::keyboard::KeyCode;
 
-use ghost::{GhostState, GhostType, Ghosts, RandomWanderController};
-use ghost_ai_system::GhostAISystem;
 use maze::{Maze, TileType, GRID_HEIGHT, GRID_WIDTH, TILE_SIZE, build_nav_grid};
 use pacman_movement_system::PacmanMovementSystem;
-use player::{PacmanInputBehavior, PlayerState};
+use player::PlayerState;
 
 struct PacmanGame;
 
@@ -105,22 +106,21 @@ impl GameLogic for PacmanGame {
                 gpu_cache: None,
             })
             .with(Movement::new(8.0 * TILE_SIZE))
+            .with(PlayerControlled)
             .build();
-        world.entity_manager.add_component(pacman_id, Controller::new(pacman_id, PacmanInputBehavior::new()));
 
-        let ghost_spawn_data: &[(GhostType, &str, usize, usize, u64)] = &[
-            (GhostType::Blinky, "blinky", 13, 11, 1),
-            (GhostType::Pinky,  "pinky",  13, 13, 2),
-            (GhostType::Inky,   "inky",   11, 13, 3),
-            (GhostType::Clyde,  "clyde",  15, 13, 4),
+        let ghost_spawn_data: &[(&str, usize, usize)] = &[
+            ("blinky", 13, 11),
+            ("pinky",  13, 13),
+            ("inky",   11, 13),
+            ("clyde",  15, 13),
         ];
 
-        let mut ghost_states: Vec<GhostState> = Vec::new();
-        for &(ghost_type, texture_name, col, row, seed) in ghost_spawn_data {
+        for &(texture_name, col, row) in ghost_spawn_data {
             let material_id = world.asset_manager.get_material_by_name(texture_name);
             let spawn_cell = GridCell::new(col as i32, row as i32);
             let spawn_pos = nav_grid.cell_to_world(spawn_cell);
-            let entity_id = EntityBuilder::new(&mut world.entity_manager)
+            EntityBuilder::new(&mut world.entity_manager)
                 .with(Transform {
                     position: spawn_pos,
                     scale: Vec3::new(16.0, 16.0, 1.0),
@@ -133,28 +133,18 @@ impl GameLogic for PacmanGame {
                 })
                 .with(NavAgent::new(spawn_cell))
                 .with(Movement::new(3.0 * TILE_SIZE))
+                .with(RandomMovement::new())
                 .build();
-            world.entity_manager.add_component(entity_id, Controller::new(entity_id, NavBehavior::new()));
-            ghost_states.push(GhostState::new(
-                entity_id,
-                ghost_type,
-                Box::new(RandomWanderController::new(GRID_WIDTH as u32, GRID_HEIGHT as u32, seed)),
-            ));
         }
 
         world.resources.insert(maze);
         world.resources.insert(nav_grid);
-        world.resources.insert(Ghosts(ghost_states));
         world.resources.insert(PlayerState::new(pacman_id, spawn_cell));
 
-        // NavigationSystem manages NavAgent path state and writes move_input.
-        // GhostAISystem fires MoveToEvent when a ghost's path is exhausted.
-        // ControllerSystem writes move_input (ghosts) or keyboard input (Pacman) into Movement.intent.
-        // PacmanMovementSystem reads desired direction, tracks tile position in PlayerState, and
-        // writes a tile-aligned Movement.intent for MovementSystem to apply.
-        // MovementSystem applies Movement.intent * impulse * delta to all entity transforms which is default.
         systems_manager.add_system(NavigationSystem::new(), world);
-        systems_manager.add_system(GhostAISystem, world);
+        systems_manager.add_system(RandomMovementSystem, world);
+        systems_manager.add_system(NavMovementSystem, world);
+        systems_manager.add_system(PlayerInputSystem::new(), world);
         systems_manager.add_system(PacmanMovementSystem, world);
         
         

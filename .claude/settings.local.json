@@ -22,7 +22,8 @@
       "Bash(xargs grep -l \"struct NavAgent\\\\|struct NavigationSystem\\\\|struct NavGrid\\\\|struct NavBehavior\")",
       "Bash(xargs cat)",
       "Bash(xargs grep -l \"NavBehavior\")",
-      "Bash(cargo check *)"
+      "Bash(cargo check *)",
+      "Bash(xargs grep -l \"pub struct\")"
     ]
   }
 }
