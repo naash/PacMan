@@ -3,6 +3,9 @@
 // This software is released under the MIT License.
 // https://opensource.org/licenses/MIT
 
+mod ghost;
+mod ghost_chase_system;
+mod ghost_mode_system;
 mod maze;
 mod pacman_movement_system;
 mod player;
@@ -19,6 +22,9 @@ use mithya_engine::{
 use glam::Vec3;
 use winit::keyboard::KeyCode;
 
+use ghost::{Ghost, GhostModeResource};
+use ghost_chase_system::GhostChaseSystem;
+use ghost_mode_system::GhostModeSystem;
 use maze::{Maze, TileType, GRID_HEIGHT, GRID_WIDTH, TILE_SIZE, build_nav_grid};
 use pacman_movement_system::PacmanMovementSystem;
 use player::PlayerState;
@@ -109,17 +115,19 @@ impl GameLogic for PacmanGame {
             .with(PlayerControlled)
             .build();
 
-        let ghost_spawn_data: &[(&str, usize, usize)] = &[
-            ("blinky", 13, 11),
-            ("pinky",  13, 13),
-            ("inky",   11, 13),
-            ("clyde",  15, 13),
+        // (spawn_col, spawn_row, scatter_col, scatter_row)
+        let ghost_spawn_data: &[(&str, usize, usize, i32, i32)] = &[
+            ("blinky", 13, 11, 25,  0),
+            ("pinky",  13, 13,  2,  0),
+            ("inky",   11, 13, 27, 30),
+            ("clyde",  15, 13,  0, 30),
         ];
 
-        for &(texture_name, col, row) in ghost_spawn_data {
+        for &(texture_name, col, row, sc_col, sc_row) in ghost_spawn_data {
             let material_id = world.asset_manager.get_material_by_name(texture_name);
             let spawn_cell = GridCell::new(col as i32, row as i32);
             let spawn_pos = nav_grid.cell_to_world(spawn_cell);
+            let scatter_corner = GridCell::new(sc_col, sc_row);
             EntityBuilder::new(&mut world.entity_manager)
                 .with(Transform {
                     position: spawn_pos,
@@ -134,13 +142,17 @@ impl GameLogic for PacmanGame {
                 .with(NavAgent::new(spawn_cell))
                 .with(Movement::new(3.0 * TILE_SIZE))
                 .with(RandomMovement::new())
+                .with(Ghost::new(scatter_corner))
                 .build();
         }
 
         world.resources.insert(maze);
         world.resources.insert(nav_grid);
         world.resources.insert(PlayerState::new(pacman_id, spawn_cell));
+        world.resources.insert(GhostModeResource::new());
 
+        systems_manager.add_system(GhostModeSystem::new(), world);
+        systems_manager.add_system(GhostChaseSystem, world);
         systems_manager.add_system(NavigationSystem::new(), world);
         systems_manager.add_system(RandomMovementSystem, world);
         systems_manager.add_system(NavMovementSystem, world);
