@@ -31,16 +31,24 @@ pub enum GhostMode {
     Frightened,
 }
 
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum GhostKind {
+    Blinky,
+    Pinky,
+    Inky,
+    Clyde,
+}
+
 // Always present on ghost entities. Carries static identity data.
 #[derive(Clone, Debug)]
 pub struct Ghost {
-    #[allow(dead_code)]
+    pub kind: GhostKind,
     pub scatter_corner: GridCell,
 }
 
 impl Ghost {
-    pub fn new(scatter_corner: GridCell) -> Self {
-        Self { scatter_corner }
+    pub fn new(kind: GhostKind, scatter_corner: GridCell) -> Self {
+        Self { kind, scatter_corner }
     }
 }
 
