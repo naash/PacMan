@@ -175,7 +175,7 @@ impl GameLogic for PacmanGame {
                     material_id,
                     gpu_cache: None,
                 })
-                .with(NavAgent::new(spawn_cell))
+                .with(NavAgent::new(spawn_cell, Some(0.05)))
                 .with(Movement::new(3.0 * TILE_SIZE))
                 .with(RandomMovement::new())
                 .with(Ghost::new(kind, scatter_corner))
