@@ -8,6 +8,8 @@ mod ghost_chase_system;
 mod ghost_mode_system;
 mod maze;
 mod pacman_movement_system;
+mod pellet;
+mod pellet_collection_system;
 mod player;
 
 use mithya_engine::{
@@ -25,8 +27,10 @@ use winit::keyboard::KeyCode;
 use ghost::{Ghost, GhostKind, GhostModeResource};
 use ghost_chase_system::GhostChaseSystem;
 use ghost_mode_system::GhostModeSystem;
+use pellet::Pellet;
 use maze::{Maze, TileType, GRID_HEIGHT, GRID_WIDTH, TILE_SIZE, build_nav_grid};
 use pacman_movement_system::PacmanMovementSystem;
+use pellet_collection_system::PelletCollectionSystem;
 use player::PlayerState;
 
 struct PacmanGame;
@@ -94,6 +98,38 @@ impl GameLogic for PacmanGame {
             }
         }
 
+        // Spawn pellets on all floor tiles
+        let pellet_material_id = world
+            .asset_manager
+            .load_material("pellet_color")
+            .expect("Failed to create pellet material");
+
+        if let Some(mat) = world.asset_manager.get_material_mut(pellet_material_id) {
+            mat.uniforms.insert("u_color".to_string(), UniformValue::Vec3([1.0, 1.0, 0.6]));
+        }
+
+        for row in 0..GRID_HEIGHT {
+            for col in 0..GRID_WIDTH {
+                if maze.tiles[row][col] == TileType::Floor {
+                    let cell = GridCell::new(col as i32, row as i32);
+                    let pos = nav_grid.cell_to_world(cell);
+                    EntityBuilder::new(&mut world.entity_manager)
+                        .with(Transform {
+                            position: pos,
+                            scale: Vec3::new(4.0, 4.0, 1.0),
+                            ..Default::default()
+                        })
+                        .with(Render {
+                            mesh: Mesh::new_quad(),
+                            material_id: Some(pellet_material_id),
+                            gpu_cache: None,
+                        })
+                        .with(Pellet::new(cell))
+                        .build();
+                }
+            }
+        }
+
         let pacman_material_id = world.asset_manager.get_material_by_name("pacman");
         let spawn_pos = nav_grid.cell_to_world(GridCell::new(
             PACMAN_SPAWN_COL as i32,
@@ -153,6 +189,7 @@ impl GameLogic for PacmanGame {
 
         systems_manager.add_system(GhostModeSystem::new(), world);
         systems_manager.add_system(GhostChaseSystem, world);
+        systems_manager.add_system(PelletCollectionSystem, world);
         systems_manager.add_system(NavigationSystem::new(), world);
         systems_manager.add_system(RandomMovementSystem, world);
         systems_manager.add_system(NavMovementSystem, world);
