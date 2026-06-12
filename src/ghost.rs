@@ -8,7 +8,6 @@ use std::any::Any;
 use mithya_engine::{core::engine_events::EngineEvent, navigation::grid_cell::GridCell};
 
 pub const START_DURATION: f32 = 3.0;
-#[allow(dead_code)]
 pub const FRIGHTENED_DURATION: f32 = 6.0;
 
 pub const MODE_SCHEDULE: &[(f32, GhostMode)] = &[
@@ -27,12 +26,11 @@ pub enum GhostMode {
     Start,
     Scatter,
     Chase,
-    #[allow(dead_code)]
     Frightened,
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
-pub enum GhostKind {
+pub enum GhostType {
     Blinky,
     Pinky,
     Inky,
@@ -42,13 +40,13 @@ pub enum GhostKind {
 // Always present on ghost entities. Carries static identity data.
 #[derive(Clone, Debug)]
 pub struct Ghost {
-    pub kind: GhostKind,
+    pub ghost_type: GhostType,
     pub scatter_corner: GridCell,
 }
 
 impl Ghost {
-    pub fn new(kind: GhostKind, scatter_corner: GridCell) -> Self {
-        Self { kind, scatter_corner }
+    pub fn new(ghost_type: GhostType, scatter_corner: GridCell) -> Self {
+        Self { ghost_type, scatter_corner }
     }
 }
 
@@ -59,7 +57,6 @@ pub struct GhostChase;
 #[derive(Clone)]
 pub struct GhostScatter;
 
-#[allow(dead_code)]
 #[derive(Clone)]
 pub struct GhostFrightened {
     pub timer: f32,
@@ -110,7 +107,6 @@ impl GhostModeResource {
     }
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct PowerPelletEatenEvent;
 

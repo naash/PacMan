@@ -5,12 +5,15 @@
 
 mod ghost;
 mod ghost_chase_system;
+mod ghost_flee_system;
 mod ghost_mode_system;
 mod maze;
 mod pacman_movement_system;
 mod pellet;
 mod pellet_collection_system;
 mod player;
+mod power_pellet;
+mod power_pellet_collection_system;
 
 use mithya_engine::{
     Movement, NavAgent, NavMovementSystem, NavigationSystem, PlayerControlled, PlayerInputSystem,
@@ -24,14 +27,17 @@ use mithya_engine::{
 use glam::Vec3;
 use winit::keyboard::KeyCode;
 
-use ghost::{Ghost, GhostKind, GhostModeResource};
+use ghost::{Ghost, GhostType, GhostModeResource};
 use ghost_chase_system::GhostChaseSystem;
+use ghost_flee_system::GhostFleeSystem;
 use ghost_mode_system::GhostModeSystem;
 use pellet::Pellet;
 use maze::{Maze, TileType, GRID_HEIGHT, GRID_WIDTH, TILE_SIZE, build_nav_grid};
 use pacman_movement_system::PacmanMovementSystem;
 use pellet_collection_system::PelletCollectionSystem;
 use player::PlayerState;
+use power_pellet::{PowerPellet, POWER_PELLET_CELLS};
+use power_pellet_collection_system::PowerPelletCollectionSystem;
 
 struct PacmanGame;
 
@@ -92,6 +98,7 @@ impl GameLogic for PacmanGame {
                             mesh: Mesh::new_quad(),
                             material_id: Some(wall_material_id),
                             gpu_cache: None,
+                            tint : None
                         })
                         .build();
                 }
@@ -111,6 +118,11 @@ impl GameLogic for PacmanGame {
         for row in 0..GRID_HEIGHT {
             for col in 0..GRID_WIDTH {
                 if maze.tiles[row][col] == TileType::Floor {
+                    let is_power_pellet = POWER_PELLET_CELLS.iter()
+                        .any(|&(pc, pr)| pc == col as i32 && pr == row as i32);
+                    if is_power_pellet {
+                        continue;
+                    }
                     let cell = GridCell::new(col as i32, row as i32);
                     let pos = nav_grid.cell_to_world(cell);
                     EntityBuilder::new(&mut world.entity_manager)
@@ -123,11 +135,40 @@ impl GameLogic for PacmanGame {
                             mesh: Mesh::new_quad(),
                             material_id: Some(pellet_material_id),
                             gpu_cache: None,
+                            tint : None
                         })
                         .with(Pellet::new(cell))
                         .build();
                 }
             }
+        }
+
+        let power_pellet_material_id = world
+            .asset_manager
+            .load_material("power_pellet_color")
+            .expect("Failed to create power pellet material");
+
+        if let Some(mat) = world.asset_manager.get_material_mut(power_pellet_material_id) {
+            mat.uniforms.insert("u_color".to_string(), UniformValue::Vec3([1.0, 1.0, 1.0]));
+        }
+
+        for &(col, row) in POWER_PELLET_CELLS {
+            let cell = GridCell::new(col, row);
+            let pos = nav_grid.cell_to_world(cell);
+            EntityBuilder::new(&mut world.entity_manager)
+                .with(Transform {
+                    position: pos,
+                    scale: Vec3::new(8.0, 8.0, 1.0),
+                    ..Default::default()
+                })
+                .with(Render {
+                    mesh: Mesh::new_quad(),
+                    material_id: Some(power_pellet_material_id),
+                    gpu_cache: None,
+                    tint : None
+                })
+                .with(PowerPellet::new(cell))
+                .build();
         }
 
         let pacman_material_id = world.asset_manager.get_material_by_name("pacman");
@@ -146,17 +187,18 @@ impl GameLogic for PacmanGame {
                 mesh: Mesh::new_quad_textured(),
                 material_id: pacman_material_id,
                 gpu_cache: None,
+                tint : None
             })
             .with(Movement::new(8.0 * TILE_SIZE))
             .with(PlayerControlled)
             .build();
 
-        // (texture, spawn_col, spawn_row, scatter_col, scatter_row, kind)
-        let ghost_spawn_data: &[(&str, usize, usize, i32, i32, GhostKind)] = &[
-            ("blinky", 13, 11, 25,  0, GhostKind::Blinky),
-            ("pinky",  13, 13,  2,  0, GhostKind::Pinky),
-            ("inky",   11, 13, 27, 30, GhostKind::Inky),
-            ("clyde",  15, 13,  0, 30, GhostKind::Clyde),
+        // (texture, spawn_col, spawn_row, scatter_col, scatter_row, type)
+        let ghost_spawn_data: &[(&str, usize, usize, i32, i32, GhostType)] = &[
+            ("blinky", 13, 11, 25,  0, GhostType::Blinky),
+            ("pinky",  13, 13,  2,  0, GhostType::Pinky),
+            ("inky",   11, 13, 27, 30, GhostType::Inky),
+            ("clyde",  15, 13,  0, 30, GhostType::Clyde),
         ];
 
         for &(texture_name, col, row, sc_col, sc_row, kind) in ghost_spawn_data {
@@ -174,6 +216,7 @@ impl GameLogic for PacmanGame {
                     mesh: Mesh::new_quad_textured(),
                     material_id,
                     gpu_cache: None,
+                    tint : None
                 })
                 .with(NavAgent::new(spawn_cell, Some(0.05)))
                 .with(Movement::new(3.0 * TILE_SIZE))
@@ -189,7 +232,9 @@ impl GameLogic for PacmanGame {
 
         systems_manager.add_system(GhostModeSystem::new(), world);
         systems_manager.add_system(GhostChaseSystem, world);
+        systems_manager.add_system(GhostFleeSystem, world);
         systems_manager.add_system(PelletCollectionSystem, world);
+        systems_manager.add_system(PowerPelletCollectionSystem, world);
         systems_manager.add_system(NavigationSystem::new(), world);
         systems_manager.add_system(RandomMovementSystem, world);
         systems_manager.add_system(NavMovementSystem, world);

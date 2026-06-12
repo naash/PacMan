@@ -12,7 +12,7 @@ use mithya_engine::{
     navigation::{grid_cell::GridCell, NavAgent, NavGrid},
 };
 
-use crate::ghost::{Ghost, GhostChase, GhostKind};
+use crate::ghost::{Ghost, GhostChase, GhostType};
 use crate::maze::{GRID_HEIGHT, GRID_WIDTH};
 use crate::player::{Direction, PlayerState};
 
@@ -35,11 +35,11 @@ impl System for GhostChaseSystem {
 
         let entities = ctx.world.entity_manager.query_two_components::<Ghost, GhostChase>();
         for entity_id in entities {
-            let (kind, scatter_corner, is_idle, my_cell) = {
+            let (ghost_type, scatter_corner, is_idle, my_cell) = {
                 let ghost = ctx.world.entity_manager.get_component::<Ghost>(entity_id);
                 let nav   = ctx.world.entity_manager.get_component::<NavAgent>(entity_id);
                 match (ghost, nav) {
-                    (Some(g), Some(n)) => (g.kind, g.scatter_corner, n.is_idle(), n.current_cell),
+                    (Some(g), Some(n)) => (g.ghost_type, g.scatter_corner, n.is_idle(), n.current_cell),
                     _ => continue,
                 }
             };
@@ -48,11 +48,11 @@ impl System for GhostChaseSystem {
                 continue;
             }
 
-            let raw_target = match kind {
-                GhostKind::Blinky => player_cell,
-                GhostKind::Pinky  => pinky_target(player_cell, player_dir),
-                GhostKind::Inky   => inky_target(player_cell, player_dir, blinky_cell.unwrap_or(player_cell)),
-                GhostKind::Clyde  => clyde_target(player_cell, my_cell, scatter_corner),
+            let raw_target = match ghost_type {
+                GhostType::Blinky => player_cell,
+                GhostType::Pinky  => pinky_target(player_cell, player_dir),
+                GhostType::Inky   => inky_target(player_cell, player_dir, blinky_cell.unwrap_or(player_cell)),
+                GhostType::Clyde  => clyde_target(player_cell, my_cell, scatter_corner),
             };
 
             // Fall back to player's cell if the computed target is a wall or out of bounds.
@@ -106,7 +106,7 @@ fn find_blinky_cell(em: &EntityManager) -> Option<GridCell> {
         .into_iter()
         .find(|&id| {
             em.get_component::<Ghost>(id)
-                .map(|g| g.kind == GhostKind::Blinky)
+                .map(|g| g.ghost_type == GhostType::Blinky)
                 .unwrap_or(false)
         })
         .and_then(|id| em.get_component::<NavAgent>(id))
