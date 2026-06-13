@@ -3,10 +3,12 @@
 // This software is released under the MIT License.
 // https://opensource.org/licenses/MIT
 
+mod game_state_system;
 mod ghost;
 mod ghost_chase_system;
 mod ghost_flee_system;
 mod ghost_mode_system;
+mod ghost_player_collision_system;
 mod maze;
 mod pacman_movement_system;
 mod pellet;
@@ -27,10 +29,12 @@ use mithya_engine::{
 use glam::Vec3;
 use winit::keyboard::KeyCode;
 
-use ghost::{Ghost, GhostType, GhostModeResource};
+use game_state_system::GameStateSystem;
+use ghost::{Ghost, GhostType, GhostModeResource, GameStateResource};
 use ghost_chase_system::GhostChaseSystem;
 use ghost_flee_system::GhostFleeSystem;
 use ghost_mode_system::GhostModeSystem;
+use ghost_player_collision_system::GhostPlayerCollisionSystem;
 use pellet::Pellet;
 use maze::{Maze, TileType, GRID_HEIGHT, GRID_WIDTH, TILE_SIZE, build_nav_grid};
 use pacman_movement_system::PacmanMovementSystem;
@@ -97,8 +101,8 @@ impl GameLogic for PacmanGame {
                         .with(Render {
                             mesh: Mesh::new_quad(),
                             material_id: Some(wall_material_id),
-                            gpu_cache: None,
-                            tint : None
+                            tint : None,
+                            gpu_cache: None
                         })
                         .build();
                 }
@@ -134,8 +138,9 @@ impl GameLogic for PacmanGame {
                         .with(Render {
                             mesh: Mesh::new_quad(),
                             material_id: Some(pellet_material_id),
-                            gpu_cache: None,
-                            tint : None
+
+                            tint : None,
+                            gpu_cache: None
                         })
                         .with(Pellet::new(cell))
                         .build();
@@ -164,8 +169,9 @@ impl GameLogic for PacmanGame {
                 .with(Render {
                     mesh: Mesh::new_quad(),
                     material_id: Some(power_pellet_material_id),
-                    gpu_cache: None,
-                    tint : None
+
+                    tint : None,
+                            gpu_cache: None
                 })
                 .with(PowerPellet::new(cell))
                 .build();
@@ -186,8 +192,9 @@ impl GameLogic for PacmanGame {
             .with(Render {
                 mesh: Mesh::new_quad_textured(),
                 material_id: pacman_material_id,
-                gpu_cache: None,
-                tint : None
+
+                tint : None,
+                            gpu_cache: None
             })
             .with(Movement::new(8.0 * TILE_SIZE))
             .with(PlayerControlled)
@@ -215,8 +222,9 @@ impl GameLogic for PacmanGame {
                 .with(Render {
                     mesh: Mesh::new_quad_textured(),
                     material_id,
-                    gpu_cache: None,
-                    tint : None
+
+                    tint : None,
+                            gpu_cache: None
                 })
                 .with(NavAgent::new(spawn_cell, Some(0.05)))
                 .with(Movement::new(3.0 * TILE_SIZE))
@@ -229,7 +237,10 @@ impl GameLogic for PacmanGame {
         world.resources.insert(nav_grid);
         world.resources.insert(PlayerState::new(pacman_id, spawn_cell));
         world.resources.insert(GhostModeResource::new());
+        world.resources.insert(GameStateResource::new());
 
+        systems_manager.add_system(GhostPlayerCollisionSystem, world);
+        systems_manager.add_system(GameStateSystem, world);
         systems_manager.add_system(GhostModeSystem::new(), world);
         systems_manager.add_system(GhostChaseSystem, world);
         systems_manager.add_system(GhostFleeSystem, world);

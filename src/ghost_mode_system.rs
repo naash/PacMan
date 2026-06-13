@@ -20,7 +20,7 @@ use mithya_engine::{
 
 use crate::ghost::{
     FRIGHTENED_DURATION, Ghost, GhostChase, GhostFrightened, GhostMode, GhostModeResource,
-    GhostScatter, PowerPelletEatenEvent,
+    GhostScatter, PowerPelletEatenEvent, PlayerGhostCollisionEvent,
 };
 
 pub struct GhostModeSystem {
@@ -159,28 +159,43 @@ impl System for GhostModeSystem {
 
 impl EngineEventListener for GhostModeSystem {
     fn interested_events(&self) -> Vec<TypeId> {
-        vec![TypeId::of::<PowerPelletEatenEvent>()]
+        vec![
+            TypeId::of::<PowerPelletEatenEvent>(),
+            TypeId::of::<PlayerGhostCollisionEvent>(),
+        ]
     }
 
-    fn on_events(&mut self, _events: &EngineEventQueue, actions: &mut EngineActionQueue, _world: &World) {
-        actions.push_anonymous(|world| {
-            let ghost_ids: Vec<u32> = world.entity_manager.query_component::<Ghost>();
-            for id in ghost_ids {
-                let current = detect_mode(&world.entity_manager, id);
-                if current == GhostMode::Frightened {
-                    if let Some(f) = world.entity_manager.get_component_mut::<GhostFrightened>(id) {
-                        f.timer = FRIGHTENED_DURATION;
+    fn on_events(&mut self, events: &EngineEventQueue, actions: &mut EngineActionQueue, _world: &World) {
+        for _event in events.iter_type::<PowerPelletEatenEvent>() {
+            actions.push_anonymous(|world| {
+                let ghost_ids: Vec<u32> = world.entity_manager.query_component::<Ghost>();
+                for id in ghost_ids {
+                    let current = detect_mode(&world.entity_manager, id);
+                    if current == GhostMode::Frightened {
+                        if let Some(f) = world.entity_manager.get_component_mut::<GhostFrightened>(id) {
+                            f.timer = FRIGHTENED_DURATION;
+                        }
+                        if let Some(nav) = world.entity_manager.get_component_mut::<NavAgent>(id) {
+                            nav.target_cell = None;
+                            nav.path.clear();
+                            nav.move_input = glam::Vec2::ZERO;
+                        }
+                    } else {
+                        println!("[GhostMode] {:?} → Frightened (power pellet)", current);
+                        transition(&mut world.entity_manager, id, current, GhostMode::Frightened);
                     }
-                    if let Some(nav) = world.entity_manager.get_component_mut::<NavAgent>(id) {
-                        nav.target_cell = None;
-                        nav.path.clear();
-                        nav.move_input = glam::Vec2::ZERO;
-                    }
-                } else {
-                    println!("[GhostMode] {:?} → Frightened (power pellet)", current);
-                    transition(&mut world.entity_manager, id, current, GhostMode::Frightened);
                 }
+            });
+        }
+
+        for event in events.iter_type::<PlayerGhostCollisionEvent>() {
+            if event.is_frightened {
+                println!("[Collision] Ghost {} eaten by player!", event.ghost_id);
+                // TODO: Remove ghost, emit GhostEatenEvent for score system
+            } else {
+                println!("[Collision] Player hit ghost {}!", event.ghost_id);
+                // TODO: Emit PlayerDeathEvent for lives/game-over system
             }
-        });
+        }
     }
 }

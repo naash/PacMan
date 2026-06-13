@@ -33,6 +33,7 @@ pub struct PlayerState {
     pub queued_direction: Direction,
     pub current_cell: GridCell,
     pub target_cell: Option<GridCell>,
+    pub invulnerability_timer: f32,
 }
 
 impl PlayerState {
@@ -43,6 +44,7 @@ impl PlayerState {
             queued_direction: Direction::None,
             current_cell: spawn_cell,
             target_cell: None,
+            invulnerability_timer: 0.0,
         }
     }
 }

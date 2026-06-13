@@ -115,3 +115,51 @@ impl EngineEvent for PowerPelletEatenEvent {
         self
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct PlayerGhostCollisionEvent {
+    pub ghost_id: u32,
+    pub is_frightened: bool,
+}
+
+impl EngineEvent for PlayerGhostCollisionEvent {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+pub struct GameStateResource {
+    pub lives: u32,
+    pub game_over: bool,
+    pub level: u32,
+}
+
+impl GameStateResource {
+    pub fn new() -> Self {
+        Self {
+            lives: 3,
+            game_over: false,
+            level: 1,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct PlayerDeathEvent;
+
+impl EngineEvent for PlayerDeathEvent {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct GhostEatenEvent {
+    pub ghost_id: u32,
+}
+
+impl EngineEvent for GhostEatenEvent {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
