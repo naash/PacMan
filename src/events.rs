@@ -35,3 +35,14 @@ impl EngineEvent for PelletEatenEvent {
         self
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct LevelCompleteEvent {
+    pub is_game_over: bool,
+}
+
+impl EngineEvent for LevelCompleteEvent {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}

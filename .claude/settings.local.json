@@ -30,7 +30,8 @@
       "Bash(grep -v \"//\\\\|derive\\\\|doc\")"
     ],
     "additionalDirectories": [
-      "C:\\Programming Workbench\\Rust\\MithyaEngine\\mithya_engine\\src\\rendering\\components"
+      "C:\\Programming Workbench\\Rust\\MithyaEngine\\mithya_engine\\src\\rendering\\components",
+      "C:\\Programming Workbench\\Rust\\MithyaEngine\\mithya_engine\\src\\core"
     ]
   }
 }

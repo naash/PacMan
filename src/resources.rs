@@ -100,3 +100,11 @@ impl ScoreResource {
         }
     }
 }
+
+pub struct LevelProgressionResource;
+
+impl LevelProgressionResource {
+    pub fn new() -> Self {
+        Self
+    }
+}
