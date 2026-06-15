@@ -26,7 +26,8 @@
       "Bash(xargs grep -l \"pub struct\")",
       "Bash(sed -i 's/                            gpu_cache: None,$//' \"/c/Programming Workbench/Rust/Sample Games/Pacman/src/main.rs\")",
       "Bash(sed -i 's/                    gpu_cache: None,$//' \"/c/Programming Workbench/Rust/Sample Games/Pacman/src/main.rs\")",
-      "Bash(sed -i 's/                gpu_cache: None,$//' \"/c/Programming Workbench/Rust/Sample Games/Pacman/src/main.rs\")"
+      "Bash(sed -i 's/                gpu_cache: None,$//' \"/c/Programming Workbench/Rust/Sample Games/Pacman/src/main.rs\")",
+      "Bash(grep -v \"//\\\\|derive\\\\|doc\")"
     ],
     "additionalDirectories": [
       "C:\\Programming Workbench\\Rust\\MithyaEngine\\mithya_engine\\src\\rendering\\components"

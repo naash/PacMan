@@ -18,10 +18,10 @@ use mithya_engine::{
     navigation::NavAgent,
 };
 
-use crate::ghost::{
-    FRIGHTENED_DURATION, Ghost, GhostChase, GhostFrightened, GhostMode, GhostModeResource,
-    GhostScatter, PowerPelletEatenEvent, PlayerGhostCollisionEvent,
-};
+use crate::config;
+use crate::events::{PowerPelletEatenEvent, PlayerGhostCollisionEvent};
+use crate::ghost::{Ghost, GhostChase, GhostFrightened, GhostMode, GhostScatter};
+use crate::resources::GhostModeResource;
 
 pub struct GhostModeSystem {
     last_printed_mode: GhostMode,
@@ -85,7 +85,7 @@ fn transition(em: &mut EntityManager, id: u32, from: GhostMode, to: GhostMode) {
             em.add_component(id, GhostScatter);
         }
         GhostMode::Frightened => {
-            em.add_component(id, GhostFrightened { timer: FRIGHTENED_DURATION });
+            em.add_component(id, GhostFrightened { timer: config::timing::FRIGHTENED_DURATION });
             em.remove_component::<RandomMovement>(id);
             if let Some(nav) = em.get_component_mut::<NavAgent>(id) {
                 nav.target_cell = None;
@@ -173,7 +173,7 @@ impl EngineEventListener for GhostModeSystem {
                     let current = detect_mode(&world.entity_manager, id);
                     if current == GhostMode::Frightened {
                         if let Some(f) = world.entity_manager.get_component_mut::<GhostFrightened>(id) {
-                            f.timer = FRIGHTENED_DURATION;
+                            f.timer = config::timing::FRIGHTENED_DURATION;
                         }
                         if let Some(nav) = world.entity_manager.get_component_mut::<NavAgent>(id) {
                             nav.target_cell = None;
@@ -190,11 +190,9 @@ impl EngineEventListener for GhostModeSystem {
 
         for event in events.iter_type::<PlayerGhostCollisionEvent>() {
             if event.is_frightened {
-                println!("[Collision] Ghost {} eaten by player!", event.ghost_id);
-                // TODO: Remove ghost, emit GhostEatenEvent for score system
+                println!("[Collision] Ghost eaten by player!");
             } else {
-                println!("[Collision] Player hit ghost {}!", event.ghost_id);
-                // TODO: Emit PlayerDeathEvent for lives/game-over system
+                println!("[Collision] Player hit ghost!");
             }
         }
     }

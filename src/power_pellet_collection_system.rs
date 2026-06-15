@@ -10,7 +10,7 @@ use mithya_engine::{
     engine::{system::{System, SystemUpdateContext}, World},
 };
 
-use crate::ghost::PowerPelletEatenEvent;
+use crate::events::PowerPelletEatenEvent;
 use crate::power_pellet::PowerPellet;
 use crate::player::PlayerState;
 

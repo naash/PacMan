@@ -10,6 +10,7 @@ use mithya_engine::{
     engine::{system::{System, SystemUpdateContext}, World},
 };
 
+use crate::events::PelletEatenEvent;
 use crate::pellet::Pellet;
 use crate::player::PlayerState;
 
@@ -36,6 +37,7 @@ impl System for PelletCollectionSystem {
 
         for pellet_id in colliding {
             ctx.world.entity_manager.destroy_entity(pellet_id);
+            ctx.events.push(PelletEatenEvent);
         }
     }
 

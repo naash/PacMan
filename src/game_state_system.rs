@@ -12,7 +12,9 @@ use mithya_engine::{
     navigation::{grid_cell::GridCell, NavGrid},
 };
 
-use crate::ghost::{GameStateResource, PlayerGhostCollisionEvent};
+use crate::config;
+use crate::events::PlayerGhostCollisionEvent;
+use crate::resources::GameStateResource;
 use crate::player::{Direction, PlayerState};
 
 pub struct GameStateSystem;
@@ -51,19 +53,10 @@ impl EngineEventListener for GameStateSystem {
     }
 
     fn on_events(&mut self, events: &EngineEventQueue, actions: &mut EngineActionQueue, _world: &World) {
-        let collision_events: Vec<(u32, bool)> = events.iter_type::<PlayerGhostCollisionEvent>()
-            .map(|e| (e.ghost_id, e.is_frightened))
-            .collect();
-
-        for (ghost_id, is_frightened) in collision_events {
-            if is_frightened {
-                actions.push_anonymous(move |world| {
-                    println!("[Death] Ghost {} eaten by player!", ghost_id);
-                    world.entity_manager.destroy_entity(ghost_id);
-                });
-            } else {
-                println!("[Death] Player hit ghost {}!", ghost_id);
-                actions.push_anonymous(move |world| {
+        for event in events.iter_type::<PlayerGhostCollisionEvent>() {
+            if !event.is_frightened {
+                actions.push_anonymous(|world| {
+                    println!("[Death] Player hit ghost!");
                     if let Some(state) = world.resources.get_mut::<GameStateResource>() {
                         state.lives = state.lives.saturating_sub(1);
                         println!("[Death] Lives remaining: {}", state.lives);
@@ -80,7 +73,7 @@ impl EngineEventListener for GameStateSystem {
                             Some(p) => p,
                             None => return,
                         };
-                        (player.entity_id, GridCell::new(13, 23))
+                        (player.entity_id, GridCell::new(config::spawn::PACMAN_COL as i32, config::spawn::PACMAN_ROW as i32))
                     };
 
                     if let Some(player) = world.resources.get_mut::<PlayerState>() {
@@ -88,7 +81,7 @@ impl EngineEventListener for GameStateSystem {
                         player.target_cell = None;
                         player.current_direction = Direction::None;
                         player.queued_direction = Direction::None;
-                        player.invulnerability_timer = 1.0;
+                        player.invulnerability_timer = config::timing::INVULNERABILITY_AFTER_RESPAWN;
                     }
 
                     if let Some(nav_grid) = world.resources.get::<NavGrid>() {

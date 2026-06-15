@@ -11,7 +11,9 @@ use mithya_engine::{
     navigation::NavAgent,
 };
 
-use crate::ghost::{Ghost, GhostFrightened, PlayerGhostCollisionEvent, GameStateResource};
+use crate::events::PlayerGhostCollisionEvent;
+use crate::ghost::{Ghost, GhostFrightened};
+use crate::resources::GameStateResource;
 use crate::player::PlayerState;
 
 pub struct GhostPlayerCollisionSystem;
@@ -43,7 +45,7 @@ impl System for GhostPlayerCollisionSystem {
             return;
         }
 
-        let entities = ctx.world.entity_manager.query_component::<Ghost>();
+        let entities: Vec<u32> = ctx.world.entity_manager.query_component::<Ghost>();
         for entity_id in entities {
             let (nav, is_frightened) = {
                 let nav = ctx.world.entity_manager.get_component::<NavAgent>(entity_id);
@@ -56,9 +58,12 @@ impl System for GhostPlayerCollisionSystem {
 
             if nav.current_cell == player_cell {
                 ctx.events.push(PlayerGhostCollisionEvent {
-                    ghost_id: entity_id,
                     is_frightened,
                 });
+                if is_frightened {
+                    println!("[Collision] Destroying frightened ghost!");
+                    ctx.world.entity_manager.destroy_entity(entity_id);
+                }
             }
         }
     }

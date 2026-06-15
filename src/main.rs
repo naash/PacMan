@@ -3,6 +3,9 @@
 // This software is released under the MIT License.
 // https://opensource.org/licenses/MIT
 
+mod config;
+mod events;
+mod resources;
 mod game_state_system;
 mod ghost;
 mod ghost_chase_system;
@@ -10,6 +13,7 @@ mod ghost_flee_system;
 mod ghost_mode_system;
 mod ghost_player_collision_system;
 mod maze;
+mod scoring_system;
 mod pacman_movement_system;
 mod pellet;
 mod pellet_collection_system;
@@ -30,23 +34,22 @@ use glam::Vec3;
 use winit::keyboard::KeyCode;
 
 use game_state_system::GameStateSystem;
-use ghost::{Ghost, GhostType, GhostModeResource, GameStateResource};
+use ghost::{Ghost, GhostType};
+use resources::{GhostModeResource, GameStateResource, ScoreResource};
+use scoring_system::ScoringSystem;
 use ghost_chase_system::GhostChaseSystem;
 use ghost_flee_system::GhostFleeSystem;
 use ghost_mode_system::GhostModeSystem;
 use ghost_player_collision_system::GhostPlayerCollisionSystem;
 use pellet::Pellet;
-use maze::{Maze, TileType, GRID_HEIGHT, GRID_WIDTH, TILE_SIZE, build_nav_grid};
+use maze::{Maze, TileType, build_nav_grid};
 use pacman_movement_system::PacmanMovementSystem;
 use pellet_collection_system::PelletCollectionSystem;
 use player::PlayerState;
-use power_pellet::{PowerPellet, POWER_PELLET_CELLS};
+use power_pellet::PowerPellet;
 use power_pellet_collection_system::PowerPelletCollectionSystem;
 
 struct PacmanGame;
-
-const PACMAN_SPAWN_COL: usize = 13;
-const PACMAN_SPAWN_ROW: usize = 23;
 
 impl GameLogic for PacmanGame {
     fn initialize(&mut self, world: &mut World, systems_manager: &mut SystemsManager) {
@@ -77,25 +80,26 @@ impl GameLogic for PacmanGame {
             .expect("Failed to create wall material");
 
         if let Some(mat) = world.asset_manager.get_material_mut(wall_material_id) {
-            mat.uniforms.insert("u_color".to_string(), UniformValue::Vec3([0.1, 0.2, 0.9]));
+            mat.uniforms.insert("u_color".to_string(), UniformValue::Vec3(config::colors::WALL));
         }
 
         EntityBuilder::new(&mut world.entity_manager)
             .with(Transform::default())
-            .with(Camera::new(248.0))
+            .with(Camera::new(config::camera::ZOOM))
             .build();
 
         let maze = Maze::new();
         let nav_grid = build_nav_grid(&maze);
 
-        for row in 0..GRID_HEIGHT {
-            for col in 0..GRID_WIDTH {
+        for row in 0..config::maze::HEIGHT {
+            for col in 0..config::maze::WIDTH {
                 if maze.tiles[row][col] == TileType::Wall {
                     let pos = nav_grid.cell_to_world(GridCell::new(col as i32, row as i32));
+                    let (w, h, d) = config::sprites::WALL;
                     EntityBuilder::new(&mut world.entity_manager)
                         .with(Transform {
                             position: pos,
-                            scale: Vec3::new(16.0, 16.0, 1.0),
+                            scale: Vec3::new(w, h, d),
                             ..Default::default()
                         })
                         .with(Render {
@@ -116,23 +120,24 @@ impl GameLogic for PacmanGame {
             .expect("Failed to create pellet material");
 
         if let Some(mat) = world.asset_manager.get_material_mut(pellet_material_id) {
-            mat.uniforms.insert("u_color".to_string(), UniformValue::Vec3([1.0, 1.0, 0.6]));
+            mat.uniforms.insert("u_color".to_string(), UniformValue::Vec3(config::colors::PELLET));
         }
 
-        for row in 0..GRID_HEIGHT {
-            for col in 0..GRID_WIDTH {
+        for row in 0..config::maze::HEIGHT {
+            for col in 0..config::maze::WIDTH {
                 if maze.tiles[row][col] == TileType::Floor {
-                    let is_power_pellet = POWER_PELLET_CELLS.iter()
+                    let is_power_pellet = config::pellets::POWER_PELLET_CELLS.iter()
                         .any(|&(pc, pr)| pc == col as i32 && pr == row as i32);
                     if is_power_pellet {
                         continue;
                     }
                     let cell = GridCell::new(col as i32, row as i32);
                     let pos = nav_grid.cell_to_world(cell);
+                    let (w, h, d) = config::sprites::PELLET;
                     EntityBuilder::new(&mut world.entity_manager)
                         .with(Transform {
                             position: pos,
-                            scale: Vec3::new(4.0, 4.0, 1.0),
+                            scale: Vec3::new(w, h, d),
                             ..Default::default()
                         })
                         .with(Render {
@@ -154,16 +159,17 @@ impl GameLogic for PacmanGame {
             .expect("Failed to create power pellet material");
 
         if let Some(mat) = world.asset_manager.get_material_mut(power_pellet_material_id) {
-            mat.uniforms.insert("u_color".to_string(), UniformValue::Vec3([1.0, 1.0, 1.0]));
+            mat.uniforms.insert("u_color".to_string(), UniformValue::Vec3(config::colors::POWER_PELLET));
         }
 
-        for &(col, row) in POWER_PELLET_CELLS {
+        for &(col, row) in config::pellets::POWER_PELLET_CELLS {
             let cell = GridCell::new(col, row);
             let pos = nav_grid.cell_to_world(cell);
+            let (w, h, d) = config::sprites::POWER_PELLET;
             EntityBuilder::new(&mut world.entity_manager)
                 .with(Transform {
                     position: pos,
-                    scale: Vec3::new(8.0, 8.0, 1.0),
+                    scale: Vec3::new(w, h, d),
                     ..Default::default()
                 })
                 .with(Render {
@@ -179,14 +185,15 @@ impl GameLogic for PacmanGame {
 
         let pacman_material_id = world.asset_manager.get_material_by_name("pacman");
         let spawn_pos = nav_grid.cell_to_world(GridCell::new(
-            PACMAN_SPAWN_COL as i32,
-            PACMAN_SPAWN_ROW as i32,
+            config::spawn::PACMAN_COL as i32,
+            config::spawn::PACMAN_ROW as i32,
         ));
-        let spawn_cell = GridCell::new(PACMAN_SPAWN_COL as i32, PACMAN_SPAWN_ROW as i32);
+        let spawn_cell = GridCell::new(config::spawn::PACMAN_COL as i32, config::spawn::PACMAN_ROW as i32);
+        let (w, h, d) = config::sprites::PACMAN;
         let pacman_id = EntityBuilder::new(&mut world.entity_manager)
             .with(Transform {
                 position: spawn_pos,
-                scale: Vec3::new(16.0, 16.0, 1.0),
+                scale: Vec3::new(w, h, d),
                 ..Default::default()
             })
             .with(Render {
@@ -196,27 +203,28 @@ impl GameLogic for PacmanGame {
                 tint : None,
                             gpu_cache: None
             })
-            .with(Movement::new(8.0 * TILE_SIZE))
+            .with(Movement::new(config::movement::pacman_speed()))
             .with(PlayerControlled)
             .build();
 
-        // (texture, spawn_col, spawn_row, scatter_col, scatter_row, type)
-        let ghost_spawn_data: &[(&str, usize, usize, i32, i32, GhostType)] = &[
-            ("blinky", 13, 11, 25,  0, GhostType::Blinky),
-            ("pinky",  13, 13,  2,  0, GhostType::Pinky),
-            ("inky",   11, 13, 27, 30, GhostType::Inky),
-            ("clyde",  15, 13,  0, 30, GhostType::Clyde),
+        // Ghost spawn configurations
+        let ghost_spawn_data: &[(&str, &config::spawn::GhostSpawn, GhostType)] = &[
+            ("blinky", &config::spawn::BLINKY, GhostType::Blinky),
+            ("pinky", &config::spawn::PINKY, GhostType::Pinky),
+            ("inky", &config::spawn::INKY, GhostType::Inky),
+            ("clyde", &config::spawn::CLYDE, GhostType::Clyde),
         ];
 
-        for &(texture_name, col, row, sc_col, sc_row, kind) in ghost_spawn_data {
+        let (w, h, d) = config::sprites::GHOST;
+        for &(texture_name, spawn_cfg, kind) in ghost_spawn_data {
             let material_id = world.asset_manager.get_material_by_name(texture_name);
-            let spawn_cell = GridCell::new(col as i32, row as i32);
+            let spawn_cell = GridCell::new(spawn_cfg.col as i32, spawn_cfg.row as i32);
             let spawn_pos = nav_grid.cell_to_world(spawn_cell);
-            let scatter_corner = GridCell::new(sc_col, sc_row);
+            let scatter_corner = GridCell::new(spawn_cfg.scatter_col, spawn_cfg.scatter_row);
             EntityBuilder::new(&mut world.entity_manager)
                 .with(Transform {
                     position: spawn_pos,
-                    scale: Vec3::new(16.0, 16.0, 1.0),
+                    scale: Vec3::new(w, h, d),
                     ..Default::default()
                 })
                 .with(Render {
@@ -226,8 +234,8 @@ impl GameLogic for PacmanGame {
                     tint : None,
                             gpu_cache: None
                 })
-                .with(NavAgent::new(spawn_cell, Some(0.05)))
-                .with(Movement::new(3.0 * TILE_SIZE))
+                .with(NavAgent::new(spawn_cell, Some(config::movement::GHOST_NAV_INTERPOLATION)))
+                .with(Movement::new(config::movement::ghost_speed()))
                 .with(RandomMovement::new())
                 .with(Ghost::new(kind, scatter_corner))
                 .build();
@@ -238,9 +246,11 @@ impl GameLogic for PacmanGame {
         world.resources.insert(PlayerState::new(pacman_id, spawn_cell));
         world.resources.insert(GhostModeResource::new());
         world.resources.insert(GameStateResource::new());
+        world.resources.insert(ScoreResource::new());
 
         systems_manager.add_system(GhostPlayerCollisionSystem, world);
         systems_manager.add_system(GameStateSystem, world);
+        systems_manager.add_system(ScoringSystem, world);
         systems_manager.add_system(GhostModeSystem::new(), world);
         systems_manager.add_system(GhostChaseSystem, world);
         systems_manager.add_system(GhostFleeSystem, world);
