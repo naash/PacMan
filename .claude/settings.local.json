@@ -31,7 +31,8 @@
     ],
     "additionalDirectories": [
       "C:\\Programming Workbench\\Rust\\MithyaEngine\\mithya_engine\\src\\rendering\\components",
-      "C:\\Programming Workbench\\Rust\\MithyaEngine\\mithya_engine\\src\\core"
+      "C:\\Programming Workbench\\Rust\\MithyaEngine\\mithya_engine\\src\\core",
+      "C:\\Programming Workbench\\Rust\\MithyaEngine\\mithya_engine\\src"
     ]
   }
 }

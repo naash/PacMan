@@ -29,6 +29,7 @@ use mithya_engine::{
     engine::{Engine, EngineConfig, EntityBuilder, GameLogic, World, system::SystemsManager},
     input::{InputMapping, mapping::{InputAction, InputBinding}},
     rendering::Camera,
+    egui,
 };
 use winit::keyboard::KeyCode;
 
@@ -68,6 +69,28 @@ impl GameLogic for PacmanGame {
                     .load_texture_for_material("clyde", "clyde.png", device, queue)
                     .expect("Failed to load clyde.png");
             });
+
+            renderer.ui_draw_fn = Some(Box::new(|ctx: &egui::Context, world: &World| {
+                let score = world.resources.get::<ScoreResource>().map(|r| r.score).unwrap_or(0);
+                let lives = world.resources.get::<GameStateResource>().map(|r| r.lives).unwrap_or(0);
+                let level = world.resources.get::<GameStateResource>().map(|r| r.level).unwrap_or(1);
+
+                egui::TopBottomPanel::top("hud")
+                    .frame(
+                        egui::Frame::new()
+                            .fill(egui::Color32::WHITE)
+                            .inner_margin(egui::Margin::symmetric(12, 6)),
+                    )
+                    .show(ctx, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new(format!("SCORE  {score}")).color(egui::Color32::BLACK).strong());
+                            ui.add_space(24.0);
+                            ui.label(egui::RichText::new(format!("LIVES  {lives}")).color(egui::Color32::BLACK).strong());
+                            ui.add_space(24.0);
+                            ui.label(egui::RichText::new(format!("LEVEL  {level}")).color(egui::Color32::BLACK).strong());
+                        });
+                    });
+            }));
         }
 
         {
