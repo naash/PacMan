@@ -113,3 +113,9 @@ pub mod game_state {
     pub const INITIAL_LIVES: u32 = 3;
     pub const INITIAL_LEVEL: u32 = 1;
 }
+
+// Screen Display Durations
+pub mod screens {
+    pub const LEVEL_COMPLETE_DURATION: f32 = 3.0;
+    pub const GAME_OVER_DURATION: f32 = 5.0;
+}

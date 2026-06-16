@@ -13,7 +13,6 @@ use mithya_engine::{
 
 use crate::events::PlayerGhostCollisionEvent;
 use crate::ghost::{Ghost, GhostFrightened};
-use crate::resources::GameStateResource;
 use crate::player::PlayerState;
 
 pub struct GhostPlayerCollisionSystem;
@@ -22,20 +21,6 @@ impl System for GhostPlayerCollisionSystem {
     fn initialize(&mut self, _world: &mut World) {}
 
     fn update(&mut self, ctx: &mut SystemUpdateContext) {
-        let game_over = ctx.world.resources.get::<GameStateResource>()
-            .map(|s| s.game_over)
-            .unwrap_or(false);
-
-        if game_over {
-            println!("[Collision] Game over - resetting. Collisions disabled.");
-            if let Some(state) = ctx.world.resources.get_mut::<GameStateResource>() {
-                state.game_over = false;
-                state.lives = 3;
-                println!("[Collision] Lives reset to 3. Game restarted!");
-            }
-            return;
-        }
-
         let (player_cell, is_invulnerable) = match ctx.world.resources.get::<PlayerState>() {
             Some(p) => (p.current_cell, p.invulnerability_timer > 0.0),
             None => return,

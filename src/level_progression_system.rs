@@ -4,13 +4,14 @@
 // https://opensource.org/licenses/MIT
 
 use std::any::{Any, TypeId};
+use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 
 use glam::Vec3;
 use mithya_engine::{
     Transform, NavAgent, Movement, RandomMovement, PlayerControlled, Render, Mesh,
     asset::UniformValue,
     core::{EngineEventListener, EngineActionQueue, EngineEventQueue},
-    engine::{EntityBuilder, system::{System, SystemUpdateContext}, World},
+    engine::{EntityBuilder, resources::Time, system::{System, SystemUpdateContext}, World},
     navigation::grid_cell::GridCell,
     rendering::Camera,
 };
@@ -22,13 +23,9 @@ use crate::maze::{Maze, TileType, build_nav_grid};
 use crate::pellet::Pellet;
 use crate::player::{PlayerState, Direction};
 use crate::power_pellet::PowerPellet;
-use crate::resources::{GameStateResource, ScoreResource, GhostModeResource};
+use crate::resources::{GameScreen, GameStateResource, ScoreResource, GhostModeResource};
 
-fn spawn_level(world: &mut World, maze: Maze, nav_grid: mithya_engine::navigation::NavGrid) -> u32 {
-    // Returns the Pac-Man entity ID
-    // Also stores maze and nav_grid in world resources
-
-    // 1. Respawn walls
+pub fn spawn_level(world: &mut World, maze: Maze, nav_grid: mithya_engine::navigation::NavGrid) -> u32 {
     let wall_material_id = world
         .asset_manager
         .load_material("wall_color")
@@ -60,7 +57,6 @@ fn spawn_level(world: &mut World, maze: Maze, nav_grid: mithya_engine::navigatio
         }
     }
 
-    // 2. Respawn pellets
     let pellet_material_id = world
         .asset_manager
         .load_material("pellet_color")
@@ -99,7 +95,6 @@ fn spawn_level(world: &mut World, maze: Maze, nav_grid: mithya_engine::navigatio
         }
     }
 
-    // 3. Respawn power pellets
     let power_pellet_material_id = world
         .asset_manager
         .load_material("power_pellet_color")
@@ -129,7 +124,6 @@ fn spawn_level(world: &mut World, maze: Maze, nav_grid: mithya_engine::navigatio
             .build();
     }
 
-    // 4. Respawn Pac-Man
     let pacman_material_id = world.asset_manager.get_material_by_name("pacman");
     let spawn_cell = GridCell::new(config::spawn::PACMAN_COL as i32, config::spawn::PACMAN_ROW as i32);
     let spawn_pos = nav_grid.cell_to_world(spawn_cell);
@@ -150,7 +144,6 @@ fn spawn_level(world: &mut World, maze: Maze, nav_grid: mithya_engine::navigatio
         .with(PlayerControlled)
         .build();
 
-    // 5. Respawn ghosts
     let ghost_spawn_data: &[(&str, &config::spawn::GhostSpawn, GhostType)] = &[
         ("blinky", &config::spawn::BLINKY, GhostType::Blinky),
         ("pinky", &config::spawn::PINKY, GhostType::Pinky),
@@ -183,28 +176,117 @@ fn spawn_level(world: &mut World, maze: Maze, nav_grid: mithya_engine::navigatio
             .build();
     }
 
-    // Store maze and nav grid in resources
     world.resources.insert(maze);
     world.resources.insert(nav_grid);
 
     pacman_id
 }
 
-pub struct LevelProgressionSystem;
+fn do_level_reset(world: &mut World, is_game_over: bool) {
+    if is_game_over {
+        if let Some(state) = world.resources.get_mut::<GameStateResource>() {
+            state.lives = config::game_state::INITIAL_LIVES;
+            state.game_over = false;
+        }
+        if let Some(score) = world.resources.get_mut::<ScoreResource>() {
+            score.score = 0;
+            score.ghost_combo = 0;
+        }
+    } else {
+        if let Some(state) = world.resources.get_mut::<GameStateResource>() {
+            state.level += 1;
+            //level is just a number, we replay the same level currently
+        }
+        if let Some(score) = world.resources.get_mut::<ScoreResource>() {
+            score.ghost_combo = 0;
+        }
+    }
+
+    world.entity_manager.destroy_all_entities_except(&[TypeId::of::<Camera>()]);
+
+    let maze = Maze::new();
+    let nav_grid = build_nav_grid(&maze);
+    let pacman_id = spawn_level(world, maze, nav_grid);
+
+    let spawn_cell = GridCell::new(config::spawn::PACMAN_COL as i32, config::spawn::PACMAN_ROW as i32);
+    if let Some(player) = world.resources.get_mut::<PlayerState>() {
+        player.entity_id = pacman_id;
+        player.current_cell = spawn_cell;
+        player.target_cell = None;
+        player.current_direction = Direction::None;
+        player.queued_direction = Direction::None;
+        player.invulnerability_timer = 0.0;
+    }
+
+    if let Some(mode_res) = world.resources.get_mut::<GhostModeResource>() {
+        mode_res.start_elapsed = 0.0;
+        mode_res.phase_elapsed = 0.0;
+        mode_res.phase_index = 0;
+        mode_res.in_start = true;
+    }
+}
+
+pub struct LevelProgressionSystem {
+    pending_reset: Option<bool>,
+    delay_timer: f32,
+    action_signal: Arc<AtomicBool>,
+}
+
+impl LevelProgressionSystem {
+    pub fn new(action_signal: Arc<AtomicBool>) -> Self {
+        Self {
+            pending_reset: None,
+            delay_timer: 0.0,
+            action_signal,
+        }
+    }
+}
 
 impl System for LevelProgressionSystem {
     fn initialize(&mut self, world: &mut World) {
-        // Spawn initial level
+        // Don't spawn gameplay on the title screen — ScreenManagerSystem handles that
+        if world.resources.get::<GameScreen>().map(|s| matches!(s, GameScreen::Title)).unwrap_or(false) {
+            return;
+        }
+
         let maze = Maze::new();
         let nav_grid = build_nav_grid(&maze);
         let pacman_id = spawn_level(world, maze, nav_grid);
 
-        // Set up player state
         let spawn_cell = GridCell::new(config::spawn::PACMAN_COL as i32, config::spawn::PACMAN_ROW as i32);
         world.resources.insert(PlayerState::new(pacman_id, spawn_cell));
     }
 
-    fn update(&mut self, _ctx: &mut SystemUpdateContext) {}
+    fn update(&mut self, ctx: &mut SystemUpdateContext) {
+        let Some(is_game_over) = self.pending_reset else { return };
+
+        // Allow the action button (Start / Play Again) to skip remaining countdown
+        if self.action_signal.swap(false, Ordering::Relaxed) {
+            self.delay_timer = 0.0;
+        }
+
+        let delta = ctx.world.resources.get::<Time>().map(|t| t.delta).unwrap_or(0.0);
+        self.delay_timer -= delta;
+
+        // Keep the timer value in GameScreen for the UI countdown display
+        if let Some(screen) = ctx.world.resources.get_mut::<GameScreen>() {
+            match screen {
+                GameScreen::LevelComplete { timer } => *timer = self.delay_timer.max(0.0),
+                GameScreen::GameOver { timer } => *timer = self.delay_timer.max(0.0),
+                _ => {}
+            }
+        }
+
+        if self.delay_timer <= 0.0 {
+            self.pending_reset = None;
+            do_level_reset(ctx.world, is_game_over);
+            if let Some(screen) = ctx.world.resources.get_mut::<GameScreen>() {
+                *screen = GameScreen::Playing;
+            }
+        }
+    }
+
+    fn is_pausable(&self) -> bool { false }
 
     fn as_event_listener_mut(&mut self) -> Option<&mut dyn EngineEventListener> {
         Some(self)
@@ -222,61 +304,29 @@ impl EngineEventListener for LevelProgressionSystem {
 
     fn on_events(&mut self, events: &EngineEventQueue, actions: &mut EngineActionQueue, _world: &World) {
         for event in events.iter_type::<LevelCompleteEvent>() {
+            // Ignore duplicate events if a reset is already pending
+            if self.pending_reset.is_some() {
+                continue;
+            }
+
             let is_game_over = event.is_game_over;
+            let duration = if is_game_over {
+                config::screens::GAME_OVER_DURATION
+            } else {
+                config::screens::LEVEL_COMPLETE_DURATION
+            };
+
+            self.pending_reset = Some(is_game_over);
+            self.delay_timer = duration;
 
             actions.push_anonymous(move |world| {
-                // 1. Handle game-over vs advance logic
-                if is_game_over {
-                    if let Some(state) = world.resources.get_mut::<GameStateResource>() {
-                        state.lives = config::game_state::INITIAL_LIVES;
-                        state.game_over = false;
-                        println!("[LevelProgression] Lives reset to {}", state.lives);
-                    }
-                    if let Some(score) = world.resources.get_mut::<ScoreResource>() {
-                        score.score = 0;
-                        score.ghost_combo = 0;
-                        println!("[LevelProgression] Score reset to 0");
-                    }
-                } else {
-                    if let Some(state) = world.resources.get_mut::<GameStateResource>() {
-                        state.level += 1;
-                        println!("[LevelProgression] Advanced to level {}", state.level);
-                    }
-                    if let Some(score) = world.resources.get_mut::<ScoreResource>() {
-                        score.ghost_combo = 0;
-                    }
+                if let Some(screen) = world.resources.get_mut::<GameScreen>() {
+                    *screen = if is_game_over {
+                        GameScreen::GameOver { timer: duration }
+                    } else {
+                        GameScreen::LevelComplete { timer: duration }
+                    };
                 }
-
-                // 2. Destroy all game entities except camera
-                world.entity_manager.destroy_all_entities_except(&[TypeId::of::<Camera>()]);
-
-                // 3. Create new maze and nav grid
-                let maze = Maze::new();
-                let nav_grid = build_nav_grid(&maze);
-
-                // 4. Spawn level
-                let pacman_id = spawn_level(world, maze, nav_grid);
-
-                // 5. Reset player state
-                let spawn_cell = GridCell::new(config::spawn::PACMAN_COL as i32, config::spawn::PACMAN_ROW as i32);
-                if let Some(player) = world.resources.get_mut::<PlayerState>() {
-                    player.entity_id = pacman_id;
-                    player.current_cell = spawn_cell;
-                    player.target_cell = None;
-                    player.current_direction = Direction::None;
-                    player.queued_direction = Direction::None;
-                    player.invulnerability_timer = 0.0;
-                }
-
-                // 6. Reset ghost mode resource
-                if let Some(mode_res) = world.resources.get_mut::<GhostModeResource>() {
-                    mode_res.start_elapsed = 0.0;
-                    mode_res.phase_elapsed = 0.0;
-                    mode_res.phase_index = 0;
-                    mode_res.in_start = true;
-                }
-
-                println!("[LevelProgression] Level regenerated successfully!");
             });
         }
     }

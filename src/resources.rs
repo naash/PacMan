@@ -108,3 +108,11 @@ impl LevelProgressionResource {
         Self
     }
 }
+
+#[derive(Clone, Copy)]
+pub enum GameScreen {
+    Title,
+    Playing,
+    LevelComplete { timer: f32 },
+    GameOver { timer: f32 },
+}

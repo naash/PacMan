@@ -35,13 +35,13 @@ impl Ghost {
 }
 
 // Mode marker components — exactly one present at a time (or none = Start).
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct GhostChase;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct GhostScatter;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct GhostFrightened {
     pub timer: f32,
 }

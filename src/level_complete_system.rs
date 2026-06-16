@@ -9,7 +9,7 @@ use mithya_engine::engine::{system::{System, SystemUpdateContext}, World};
 
 use crate::events::LevelCompleteEvent;
 use crate::pellet::Pellet;
-use crate::resources::GameStateResource;
+use crate::resources::{GameScreen, GameStateResource};
 
 pub struct LevelCompleteSystem;
 
@@ -17,12 +17,15 @@ impl System for LevelCompleteSystem {
     fn initialize(&mut self, _world: &mut World) {}
 
     fn update(&mut self, ctx: &mut SystemUpdateContext) {
+        if !matches!(ctx.world.resources.get::<GameScreen>().copied(), Some(GameScreen::Playing)) {
+            return;
+        }
+
         let game_over = ctx.world.resources.get::<GameStateResource>()
             .map(|s| s.game_over)
             .unwrap_or(false);
 
         if game_over {
-            println!("[LevelComplete] Game Over! Restarting level...");
             ctx.events.push(LevelCompleteEvent { is_game_over: true });
             return;
         }
@@ -30,7 +33,6 @@ impl System for LevelCompleteSystem {
         let remaining_pellets = ctx.world.entity_manager.query_component::<Pellet>().len();
 
         if remaining_pellets == 0 {
-            println!("[LevelComplete] All pellets eaten! Advancing to next level!");
             ctx.events.push(LevelCompleteEvent { is_game_over: false });
         }
     }
