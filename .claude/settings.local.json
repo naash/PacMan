@@ -27,7 +27,8 @@
       "Bash(sed -i 's/                            gpu_cache: None,$//' \"/c/Programming Workbench/Rust/Sample Games/Pacman/src/main.rs\")",
       "Bash(sed -i 's/                    gpu_cache: None,$//' \"/c/Programming Workbench/Rust/Sample Games/Pacman/src/main.rs\")",
       "Bash(sed -i 's/                gpu_cache: None,$//' \"/c/Programming Workbench/Rust/Sample Games/Pacman/src/main.rs\")",
-      "Bash(grep -v \"//\\\\|derive\\\\|doc\")"
+      "Bash(grep -v \"//\\\\|derive\\\\|doc\")",
+      "Bash(git -C \"c:/Programming Workbench/Rust/Sample Games/Pacman\" rm --cached CLAUDE.md)"
     ],
     "additionalDirectories": [
       "C:\\Programming Workbench\\Rust\\MithyaEngine\\mithya_engine\\src\\rendering\\components",
